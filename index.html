@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Liga I Predictor PRO</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; display: flex; justify-content: center; }
+        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+        .grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin-bottom: 20px; }
+        select, input { padding: 12px; border-radius: 8px; border: 1px solid #ddd; width: 100%; font-size: 16px; outline: none; }
+        button { background: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        .res { display: none; margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px; }
+        .badge { background: #d4edda; color: #155724; padding: 5px 12px; border-radius: 6px; font-size: 0.85em; font-weight: bold; margin-left: 10px; border: 1px solid #c3e6cb; }
+        .bar-wrap { background: #eee; height: 12px; border-radius: 6px; margin: 8px 0 18px 0; overflow: hidden; }
+        .bar { height: 100%; transition: width 0.8s ease-in-out; }
+        .win { background: #28a745; } .draw { background: #ffc107; } .loss { background: #dc3545; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 style="text-align:center; color:#333;">🇷🇴 Analizador de Valor</h2>
+    <div class="grid">
+        <select id="hSel"><option>Cargando motor...</option></select>
+        <b>VS</b>
+        <select id="aSel"><option>Cargando motor...</option></select>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+        <input type="number" id="oW" placeholder="Cuota 1" step="0.01">
+        <input type="number" id="oD" placeholder="Cuota X" step="0.01">
+        <input type="number" id="oL" placeholder="Cuota 2" step="0.01">
+    </div>
+
+    <button onclick="run()">Calcular Esperanza Matemática</button>
+
+    <div id="resArea" class="res">
+        <div style="text-align:center; background:#eef6ff; padding:15px; border-radius:10px; margin-bottom:20px;">
+            Goles Esperados: <b id="tExp" style="font-size: 1.3em;"></b>
+        </div>
+        <div>Local <b id="vW"></b>% <span id="eW" class="badge" style="display:none">★ VALOR</span></div>
+        <div class="bar-wrap"><div id="bW" class="bar win"></div></div>
+        <div>Empate <b id="vD"></b>% <span id="eD" class="badge" style="display:none">★ VALOR</span></div>
+        <div class="bar-wrap"><div id="bD" class="bar draw"></div></div>
+        <div>Visita <b id="vL"></b>% <span id="eL" class="badge" style="display:none">★ VALOR</span></div>
+        <div class="bar-wrap"><div id="bL" class="bar loss"></div></div>
+        <div style="background:#f8f9fa; padding:15px; border-radius:10px; text-align:center; font-weight:bold;">
+            Probabilidad Over 2.5: <span id="vO"></span>%
+        </div>
+    </div>
+</div>
+
+<script>
+    // CAMBIO CLAVE: Ya no hay URL de Render aquí
+    const API = "/api"; 
+
+    async function init() {
+        try {
+            const r = await fetch(`${API}/teams`);
+            const d = await r.json();
+            const hs = document.getElementById('hSel'), as = document.getElementById('aSel');
+            hs.innerHTML = ""; as.innerHTML = "";
+            d.teams.forEach(t => {
+                hs.add(new Option(t.team, t.team));
+                as.add(new Option(t.team, t.team));
+            });
+        } catch (e) { console.error("Error:", e); }
+    }
+
+    async function run() {
+        const payload = { home_team: document.getElementById('hSel').value, away_team: document.getElementById('aSel').value };
+        try {
+            const r = await fetch(`${API}/predict`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const d = await r.json();
+            document.getElementById('resArea').style.display = 'block';
+            document.getElementById('tExp').innerText = d.expected_goals.total;
+            const set = (vId, bId, val, oId, badge) => {
+                document.getElementById(vId).innerText = val;
+                document.getElementById(bId).style.width = val + "%";
+                const odd = parseFloat(document.getElementById(oId).value);
+                document.getElementById(badge).style.display = (odd > 0 && (val/100) * odd > 1.05) ? 'inline' : 'none';
+            };
+            set('vW', 'bW', d.market_1x2.home, 'oW', 'eW');
+            set('vD', 'bD', d.market_1x2.draw, 'oD', 'eD');
+            set('vL', 'bL', d.market_1x2.away, 'oL', 'eL');
+            document.getElementById('vO').innerText = d.market_goals.over_25;
+        } catch (e) { alert("Iniciando conexión..."); }
+    }
+    init();
+</script>
+</body>
+</html>
