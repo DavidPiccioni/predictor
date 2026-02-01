@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>🇷🇴 Liga I Predictor - David Workspace</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; display: flex; justify-content: center; }
+        .card { background: white; border-radius: 12px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+        .grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin-bottom: 20px; }
+        select, input { padding: 12px; border-radius: 8px; border: 1px solid #ddd; width: 100%; font-size: 16px; outline: none; }
+        button { background: #007bff; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #0056b3; }
+        .res { display: none; margin-top: 20px; border-top: 2px solid #eee; padding-top: 20px; }
+        
+        /* ESTILOS DE VALOR RESTAURADOS */
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 0.8em; font-weight: bold; margin-left: 10px; display: none; }
+        .val-pos { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .val-neg { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        
+        .esp-num { font-weight: bold; color: #555; font-size: 0.9em; }
+        .bar-wrap { background: #eee; height: 12px; border-radius: 6px; margin: 8px 0 18px 0; overflow: hidden; }
+        .bar { height: 100%; transition: width 0.8s ease; }
+        .win { background: #28a745; } .draw { background: #ffc107; } .loss { background: #dc3545; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2 style="text-align:center; color:#333;">🇷🇴 Analizador de Valor Liga I</h2>
+    <div class="grid">
+        <select id="hSel"><option>Cargando equipos...</option></select>
+        <b style="color:#666;">VS</b>
+        <select id="aSel"><option>Cargando equipos...</option></select>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+        <input type="number" id="oW" placeholder="Cuota 1" step="0.01">
+        <input type="number" id="oD" placeholder="Cuota X" step="0.01">
+        <input type="number" id="oL" placeholder="Cuota 2" step="0.01">
+    </div>
+
+    <button onclick="run()">Calcular Esperanza Matemática</button>
+
+    <div id="resArea" class="res">
+        <div style="text-align:center; background:#eef6ff; padding:15px; border-radius:10px; margin-bottom:20px;">
+            Goles Esperados en el Partido: <b id="tExp" style="font-size: 1.3em; color:#007bff;"></b>
+        </div>
+
+        <div>
+            Local <b id="vW"></b>% | Esperanza: <span id="numW" class="esp-num">-</span>
+            <span id="eW" class="badge val-pos">★ VALOR</span>
+        </div>
+        <div class="bar-wrap"><div id="bW" class="bar win"></div></div>
+        
+        <div>
+            Empate <b id="vD"></b>% | Esperanza: <span id="numD" class="esp-num">-</span>
+            <span id="eD" class="badge val-pos">★ VALOR</span>
+        </div>
+        <div class="bar-wrap"><div id="bD" class="bar draw"></div></div>
+        
+        <div>
+            Visita <b id="vL"></b>% | Esperanza: <span id="numL" class="esp-num">-</span>
+            <span id="eL" class="badge val-pos">★ VALOR</span>
+        </div>
+        <div class="bar-wrap"><div id="bL" class="bar loss"></div></div>
+
+        <div style="background:#f8f9fa; padding:15px; border-radius:10px; text-align:center; font-weight:bold; border: 1px dashed #ccc;">
+            Probabilidad Over 2.5: <span id="vO" style="color:#28a745;"></span>%
+        </div>
+    </div>
+</div>
+
+<script>
+    const API = "/api"; // USANDO TU REWRITE DE RENDER
+
+    async function init() {
+        try {
+            const r = await fetch(`${API}/teams`);
+            const d = await r.json();
+            const hs = document.getElementById('hSel'), as = document.getElementById('aSel');
+            hs.innerHTML = ""; as.innerHTML = "";
+            d.teams.forEach(t => { hs.add(new Option(t.team, t.team)); as.add(new Option(t.team, t.team)); });
+        } catch (e) { console.error(e); }
+    }
+
+    async function run() {
+        const payload = { home_team: document.getElementById('hSel').value, away_team: document.getElementById('aSel').value };
+        try {
+            const r = await fetch(`${API}/predict`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const d = await r.json();
+            document.getElementById('resArea').style.display = 'block';
+            document.getElementById('tExp').innerText = d.expected_goals.total;
+
+            const updateField = (prob, oddId, numId, badgeId, barId) => {
+                const odd = parseFloat(document.getElementById(oddId).value) || 0;
+                const esperanza = (prob / 100) * odd; // CÁLCULO DE VALOR
+                
+                document.getElementById(numId).innerText = odd > 0 ? esperanza.toFixed(2) : "-";
+                
+                // MOSTRAR VALOR SI ESPERANZA > 1.05
+                const badge = document.getElementById(badgeId);
+                if (odd > 0 && esperanza > 1.05) {
+                    badge.style.display = 'inline';
+                    document.getElementById(numId).style.color = "#28a745";
+                } else {
+                    badge.style.display = 'none';
+                    document.getElementById(numId).style.color = odd > 0 ? "#dc3545" : "#555";
+                }
+                
+                document.getElementById(barId).style.width = prob + "%";
+            };
+
+            document.getElementById('vW').innerText = d.market_1x2.home;
+            document.getElementById('vD').innerText = d.market_1x2.draw;
+            document.getElementById('vL').innerText = d.market_1x2.away;
+            document.getElementById('vO').innerText = d.market_goals.over_25;
+
+            updateField(d.market_1x2.home, 'oW', 'numW', 'eW', 'bW');
+            updateField(d.market_1x2.draw, 'oD', 'numD', 'eD', 'bD');
+            updateField(d.market_1x2.away, 'oL', 'numL', 'eL', 'bL');
+
+        } catch (e) { alert("Conectando con el motor..."); }
+    }
+    init();
+</script>
+</body>
+</html>
